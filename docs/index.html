@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Генератор цифр R-NOT</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one narrow column; the digit board (MNIST is white ink on black) is the hero, controls above it, how-it-works below. */
+:root {
+  --bg: #eef2f7; --surface: #ffffff; --ink: #14213d; --muted: #5a6782; --line: #d5dce8;
+  --accent: #2b59c3; --accent-ink: #ffffff; --board: #0b1222; --board-line: #1e2a44;
+  --display: 'Unbounded', 'Segoe UI', system-ui, sans-serif;
+  --body: 'Golos Text', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0d1424; --surface: #141d31; --ink: #e6ecf8; --muted: #9aa8c4; --line: #26334f;
+  --accent: #7aa2ff; --accent-ink: #0d1424; --board: #05090f; --board-line: #1a2540; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0d1424; --surface: #141d31; --ink: #e6ecf8; --muted: #9aa8c4; --line: #26334f;
+  --accent: #7aa2ff; --accent-ink: #0d1424; --board: #05090f; --board-line: #1a2540; color-scheme: dark }
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; overflow-x: hidden; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.55 var(--body); }
+.wrap { grid-template-columns: minmax(0, 1fr); }
+.wrap > * { min-width: 0; }
+.wrap { max-width: 760px; margin: 0 auto; padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 22px; }
+h1 { font: 700 clamp(26px, 6vw, 40px)/1.1 var(--display); margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.lead { margin: 0; color: var(--muted); max-width: 62ch; }
+.eyebrow { font: 600 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 10px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 14px; }
+.digits { display: grid; grid-template-columns: repeat(11, 1fr); gap: 6px; }
+.digits button { font: 600 18px/1 var(--mono); padding: 12px 0; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); cursor: pointer; min-width: 0; }
+.digits button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.digits button:focus-visible, .go:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.go { font: 600 16px/1 var(--body); padding: 13px 20px; border-radius: 10px; border: 0; background: var(--ink); color: var(--bg); cursor: pointer; }
+.stat { font: 400 14px/1.4 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.stat b { color: var(--ink); font-weight: 600; }
+.board { background: var(--board); border-radius: 14px; padding: 10px; border: 1px solid var(--board-line); }
+canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.step { border-top: 2px solid var(--accent); padding-top: 10px; min-width: 0; }
+.step h3 { font: 600 15px/1.3 var(--body); margin: 0 0 4px; }
+.step p { margin: 0; color: var(--muted); font-size: 14px; }
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; }
+@media (max-width: 560px) {
+  .digits { grid-template-columns: repeat(6, 1fr); }
+  .steps { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Школьный проект · МАОУ СОШ № 217</p>
+    <h1>Генератор цифр R-NOT</h1>
+    <p class="lead">Нейросеть рисует рукописные цифры за 2 вызова вместо 128. Всё считается прямо на этом устройстве, без сервера.</p>
+  </header>
+
+  <section class="panel" aria-label="Управление">
+    <div class="digits" id="digits" role="group" aria-label="Какую цифру рисовать"></div>
+    <div class="row">
+      <button class="go" id="go" type="button">Нарисовать ещё</button>
+      <span class="stat" id="stat">Загружаю нейросеть…</span>
+    </div>
+  </section>
+
+  <div class="board"><canvas id="board" width="560" height="336" aria-label="Нарисованные цифры"></canvas></div>
+
+  <section>
+    <p class="eyebrow">Как это работает</p>
+    <div class="steps">
+      <div class="step"><h3>Шум на сфере</h3><p>Берётся случайная точка на поверхности многомерной сферы.</p></div>
+      <div class="step"><h3>Два прыжка по дугам</h3><p>Первый прыжок грубый, второй точный. Куда прыгать, сеть выучила по правилам оптимального транспорта.</p></div>
+      <div class="step"><h3>Картинка</h3><p>Декодер превращает точку сферы в картинку 28×28 пикселей.</p></div>
+    </div>
+  </section>
+
+  <footer>Проект Андрея Пимшина, 10 «Т» класс. Метод R-NOT: Риманов оптимальный транспорт на гиперсфере. Нейросеть обучена на наборе MNIST.</footer>
+</div>
+
+<script src="weights.js"></script>
+<script src="rnot.js"></script>
+<script>
+(() => {
+  const COLS = 10, ROWS = 6, N = COLS * ROWS, CELL = 56;
+  const digitsEl = document.getElementById('digits'), stat = document.getElementById('stat');
+  const go = document.getElementById('go'), cv = document.getElementById('board'), ctx = cv.getContext('2d');
+  let choice = -1, weights = null;
+  const options = [['все', -1]].concat([...Array(10).keys()].map(d => [String(d), d]));
+  for (const [label, value] of options) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = label; b.setAttribute('aria-pressed', String(value === choice));
+    b.addEventListener('click', () => { choice = value; for (const x of digitsEl.children) x.setAttribute('aria-pressed', 'false');
+      b.setAttribute('aria-pressed', 'true'); draw(); });
+    digitsEl.appendChild(b);
+  }
+  function draw() {
+    if (!weights) return;
+    go.disabled = true; stat.textContent = 'Рисую…';
+    requestAnimationFrame(() => setTimeout(() => {
+      const labels = Array.from({ length: N }, (_, i) => choice < 0 ? i % 10 : choice);
+      const k = weights.basis.shape[1];
+      const t0 = performance.now();
+      const pics = RNOT.generate(weights, RNOT.gaussian(N * k), labels);
+      const ms = performance.now() - t0;
+      const img = ctx.createImageData(28, 28);
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height);
+      for (let s = 0; s < N; s++) {
+        for (let p = 0; p < 784; p++) { const v = Math.round(255 * pics[s * 784 + p]);
+          img.data[p * 4] = v; img.data[p * 4 + 1] = v; img.data[p * 4 + 2] = v; img.data[p * 4 + 3] = 255; }
+        const tmp = document.createElement('canvas'); tmp.width = tmp.height = 28; tmp.getContext('2d').putImageData(img, 0, 0);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(tmp, (s % COLS) * CELL, Math.floor(s / COLS) * CELL, CELL, CELL);
+      }
+      stat.innerHTML = `<b>${N}</b> цифр · <b>2</b> вызова сети на цифру · <b>${ms.toFixed(0)} мс</b> на вашем устройстве`;
+      go.disabled = false;
+    }, 0));
+  }
+  go.addEventListener('click', draw);
+  try { weights = RNOT.loadWeights(window.RNOT_WEIGHTS); draw(); }
+  catch (e) { stat.textContent = 'Не удалось загрузить нейросеть. Обновите страницу.'; }
+})();
+</script>
+
+</body>
+</html>

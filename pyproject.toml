@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rnot"
+version = "0.1.0"
+description = "R-NOT: two-step generator on the hypersphere by Riemannian optimal transport"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{name = "Andrey Pimshin"}]
+dependencies = ["torch>=2.0"]
+
+[tool.setuptools]
+packages = ["rnot"]
