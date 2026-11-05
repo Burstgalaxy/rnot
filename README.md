@@ -9,12 +9,12 @@
 ## Установка
 
 ```bash
-pip install git+https://github.com/USERNAME/rnot
+pip install git+https://github.com/Burstgalaxy/rnot
 ```
 
 ## Попробовать в браузере
 
-Сайт с генератором цифр: https://USERNAME.github.io/rnot/ — нейросеть считается прямо на вашем устройстве, без сервера.
+Сайт с генератором цифр: https://Burstgalaxy.github.io/rnot/ — нейросеть считается прямо на вашем устройстве, без сервера.
 
 ## Пример
 
